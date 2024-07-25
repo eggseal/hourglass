@@ -1,0 +1,6 @@
+.vscode
+
+SandClock/build/*
+
+*.pdsbak
+*.workspace
