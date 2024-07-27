@@ -1,3 +1,7 @@
+// Macros
+// #define SIMULATION
+// #define DEBUG
+
 // Pin I/O
 const uint8_t ROW[] = { 2, 3, 4, 5, 6 };    // The row of LEDs to turn on
 const uint8_t COL[] = { 7, 8, 9, 10, 11 };  // The column of LEDs to turn on
@@ -11,10 +15,9 @@ const uint8_t COL[] = { 7, 8, 9, 10, 11 };  // The column of LEDs to turn on
 // Constants
 #define N 5      // Size of the matrix
 #define DOTS 22  // Number of LEDs turned on at once
-#define DEBUG
 
 // Variables
-unsigned int length = 5000;        // Countdown timer (ms)
+unsigned int length = 20000;       // Countdown timer (ms)
 float secsPerDot = length / DOTS;  // How much time (ms) is represented by one dot
 int dotsRemoved = 0;               // Counter of how many dots have been removed from the top
 
@@ -60,6 +63,7 @@ void drawScreen(bool (*side)[N][N]) {
     digitalWrite(ROW[r], LOW);
   }
 }
+#ifdef DEBUG
 /**
  * Prints a matrix to the Serial monitor for debugging purposes
  * @param matrix The state matrix that is being drawn
@@ -74,6 +78,35 @@ void printMatrix(bool matrix[N][N]) {
     Serial.println();
   }
 }
+#endif
+#ifdef SIMULATION
+/**
+ *
+ *
+ */
+void sendClockSerial(bool matrix[N][N]) {
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      Serial.print((*top)[i][j] ? 1 : 0);
+      if (j < N - 1)
+        Serial.print(",");
+    }
+    Serial.print(";");  // Newline after each row
+  }
+  Serial.println();
+  delay(50);  // Delay to avoid flooding the serial port
+  for (int i = N - 1; i >= 0; i--) {
+    for (int j = N - 1; j >= 0; j--) {
+      Serial.print((*bot)[i][j] ? 1 : 0);
+      if (j > 0)
+        Serial.print(",");
+    }
+    Serial.print(";");  // Newline after each row
+  }
+  Serial.println();
+  delay(50);  // Delay to avoid flooding the serial port
+}
+#endif
 
 void setup() {
   // Pin definition
@@ -178,6 +211,7 @@ void loop() {
 
   // Change the indes of the diagonal dot if all the dots haven't been placed on every interval
   if (dotsPlaced < DOTS && millis() - lastMiddleDot > min(secsPerDot / N, 250)) {
+    (*bot)[m][m] = m == 0 && dotsPlaced > 0 ? 1 : oldMiddleState;
     m = (m - 1 + N) % N;  // Change to the next diagonal position
 
     reachedSurface = !oldMiddleState && ((*bot)[m][m] || m == 0);  // It reached the surface if previously the dot was placed on an off LED and now it's on an on LED or at the bottom of the clock
@@ -195,4 +229,9 @@ void loop() {
   drawScreen(&SIDE1);
   digitalWrite(MUX, LOW);
   drawScreen(&SIDE2);
+
+#ifdef SIMULATION
+  sendClockSerial(top);
+  sendClockSerial(bot);
+#endif
 }
