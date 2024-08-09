@@ -17,6 +17,10 @@ const uint8_t COL[] = { 7, 8, 9, 10, 11 };  // The column of LEDs to turn on
 #define DOTS 22  // Number of LEDs turned on at once
 
 // Variables
+bool lastAddState = false;  // The state of the ADD button in the previous iteration
+bool lastSubState = false;  // The state of the SUB button in the previous iteration
+bool lastRotState = false;  // The state of the rotation in the previous iteration
+
 unsigned int length = 20000;       // Countdown timer (ms)
 float secsPerDot = length / DOTS;  // How much time (ms) is represented by one dot
 int dotsRemoved = 0;               // Counter of how many dots have been removed from the top
@@ -28,7 +32,6 @@ bool reachedSurface = false;      // Flag if the falling dot reached the bottom 
 bool oldMiddleState = false;      // Old state of the overwritten dot in the diagonal
 
 bool sel = 1;                 // The current mux toggle
-bool upsideDown = false;      // Flag that swaps the order of both sides
 unsigned long resetTime = 0;  // Execution time in which the clock was restarted
 bool SIDE1[N][N] = {
   // State matrix of the LEDs
@@ -55,12 +58,12 @@ bool SIDE2[N][N] = {
 void drawScreen(bool (*side)[N][N]) {
   // Turn HIGH every row one by one while turning LOW every one on the side matrix row
   for (uint8_t r = 0; r < N; r++) {
-    digitalWrite(ROW[r], HIGH);
+    digitalWrite(ROW[r], LOW);
     for (uint8_t c = 0; c < N; c++)
       digitalWrite(COL[c], !(*side)[r][c]);
     // Wait 1ms before turning the row LOW to allow the eye to see it
     delay(1);
-    digitalWrite(ROW[r], LOW);
+    digitalWrite(ROW[r], HIGH);
   }
 }
 #ifdef DEBUG
@@ -81,8 +84,8 @@ void printMatrix(bool matrix[N][N]) {
 #endif
 #ifdef SIMULATION
 /**
- *
- *
+ * Sends a matrix on a MatLab format on a single line to the Serial port, intended for simulating the LEDs from another program
+ * @param matrix The state matrix that's being rendered
  */
 void sendClockSerial(bool matrix[N][N]) {
   for (int i = 0; i < N; i++) {
@@ -120,7 +123,7 @@ void setup() {
     pinMode(COL[i], OUTPUT);
 
     // Output clearing
-    digitalWrite(ROW[i], LOW);
+    digitalWrite(ROW[i], HIGH);
     digitalWrite(COL[i], HIGH);
   }
   digitalWrite(MUX, HIGH);
@@ -133,20 +136,29 @@ void setup() {
 #endif
 
   // Variable initialization
-  upsideDown = digitalRead(ROT);
+  lastAddState = digitalRead(ADD);
+  lastSubState = digitalRead(SUB);
+  lastRotState = digitalRead(ROT);
 }
 
 void loop() {
+  // Handle length changes depending on which button just got pressed
+  int diff = digitalRead(BY5) ? 5 : 1;
+  if (!lastAddState && digitalRead(ADD)) length += diff * 1000;
+  else if (!lastSubState && digitalRead(SUB)) length -= diff * 1000;
+  lastAddState = digitalRead(ADD);
+  lastSubState = digitalRead(SUB);
+
   // If the clock's rotation changed, swap the top and bottom sides and restart the clock at the current elapsed time
-  if (upsideDown != digitalRead(ROT)) {
+  if (lastRotState != digitalRead(ROT)) {
 #ifdef DEBUG
     Serial.print("Reset: R: ");
     Serial.print(dotsRemoved);
     Serial.print(", P: ");
     Serial.println(dotsPlaced);
 #endif
-    dotsRemoved = DOTS - dotsRemoved;                   // This needs checking
-    dotsPlaced = DOTS - dotsPlaced;                     // This needs checking
+    dotsRemoved = DOTS - dotsPlaced;                    // The dots removed become the one's that haven't been placed
+    dotsPlaced = DOTS - dotsRemoved;                    // The dots placed become the one's that haven't been removed
     resetTime = millis() - (dotsRemoved * secsPerDot);  // Current time minus the time it would take for the already removed dots to be removed
 #ifdef DEBUG
     Serial.print("Millis: ");
@@ -155,10 +167,12 @@ void loop() {
     Serial.println(resetTime);
 #endif
   }
+  lastRotState = digitalRead(ROT);
+
   // Swap bottom and top depending on the rotation of the clock
-  upsideDown = digitalRead(ROT);
-  bool(*top)[N][N] = upsideDown ? &SIDE2 : &SIDE1;
-  bool(*bot)[N][N] = upsideDown ? &SIDE1 : &SIDE2;
+  lastRotState = digitalRead(ROT);
+  bool(*top)[N][N] = lastRotState ? &SIDE2 : &SIDE1;
+  bool(*bot)[N][N] = lastRotState ? &SIDE1 : &SIDE2;
 
   // Draws the top side if there's still dots to be removed and the time has surpassed the next dot time step
   if (dotsRemoved < DOTS && millis() > resetTime + (dotsRemoved + 1) * secsPerDot) {
@@ -174,7 +188,7 @@ void loop() {
     while (i + j <= N * 2 - 2) {
       // Go diagonally through every diagonal position from bottom left to top right
       for (uint8_t r = i, c = j; r >= j && c <= i; r--, c++) {
-        (*top)[r][c] = toTurnOff <= 0 ? true : false;
+        (*top)[r][c] = toTurnOff <= 0 ? HIGH : LOW;
         toTurnOff--;
       }
       // Move the diagonal one position to the right
@@ -192,7 +206,7 @@ void loop() {
     while (i + j <= N * 2 - 2) {
       // Go diagonally through every diagonal position from bottom left to top right
       for (uint8_t r = i, c = j; r >= j && c <= i; r--, c++) {
-        (*bot)[r][c] = dotsPlaced >= dotsRemoved ? false : true;
+        (*bot)[r][c] = dotsPlaced >= dotsRemoved ? LOW : HIGH;
         dotsPlaced += (*bot)[r][c];
       }
       // Move the diagonal one position to the right
@@ -209,7 +223,7 @@ void loop() {
 #endif
   }
 
-  // Change the indes of the diagonal dot if all the dots haven't been placed on every interval
+  // Change the index of the diagonal dot if all the dots haven't been placed on every interval
   if (dotsPlaced < DOTS && millis() - lastMiddleDot > min(secsPerDot / N, 250)) {
     (*bot)[m][m] = m == 0 && dotsPlaced > 0 ? 1 : oldMiddleState;
     m = (m - 1 + N) % N;  // Change to the next diagonal position

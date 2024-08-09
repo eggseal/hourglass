@@ -1,6 +1,7 @@
 .vscode
 
 */build/
+*/.theia
 
 *.pdsbak
 *.workspace
