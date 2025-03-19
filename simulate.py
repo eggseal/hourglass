@@ -1,6 +1,5 @@
 import os
 import serial
-import time
 
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -14,7 +13,6 @@ def print_rhombus(matrix):
         return [matrix[i][j] for i in range(n) for j in range(n)]
 
     flattened_matrix = flatten(matrix)
-    index = 0
     
     # Print the upper part of the rhombus
     i = 0
@@ -44,7 +42,7 @@ def print_rhombus(matrix):
         if i >= n - 1: j += 1
         else: i += 1 
 
-ser = serial.Serial("COM3", 9600)
+ser = serial.Serial("COM8", 9600)
 def read_matrix(rows, cols):
     matrix = []
 
@@ -66,21 +64,3 @@ while True:
     clear()
     print_rhombus(m)
     print_rhombus(m2)
-    
-
-# Example usage
-matrix = [
-    [1, 2, 3, 4],
-    [5, 6, 7, 8],
-    [9, 0, 1, 2],
-    [3, 4, 5, 6]
-]
-matrix2 = [
-    [1, 2, 3, 4],
-    [5, 6, 7, 8],
-    [9, 0, 1, 2],
-    [3, 4, 5, 6]
-]
-
-print_rhombus(matrix)
-print_rhombus(matrix2)
